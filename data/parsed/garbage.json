@@ -1,0 +1,24 @@
+{
+  "scene_number": 1,
+  "int_ext": null,
+  "location": null,
+  "time_of_day": null,
+  "characters": [],
+  "actions": [
+    {
+      "text": "A woman (mid-30s), dressed in a sharp blazer and tailored trousers, sits across from two men—one older with distinguished salt-and-pepper hair, the other younger and more casually dressed. They are seated in an elegant, wood-paneled conference room."
+    }
+  ],
+  "dialogue": [
+    {
+      "speaker": "WOMAN",
+      "text": ""
+    },
+    {
+      "speaker": "MAN 1 (OLD)",
+      "text": "Quarterly revenue exceeded projections by twelve percent this year."
+    }
+  ],
+  "camera_directions": [],
+  "transitions": []
+}

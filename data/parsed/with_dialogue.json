@@ -1,0 +1,23 @@
+{
+  "scene_number": 1,
+  "int_ext": null,
+  "location": "KITCHEN",
+  "time_of_day": "DAY",
+  "characters": [
+    "Maya",
+    "Dev"
+  ],
+  "actions": [],
+  "dialogue": [
+    {
+      "speaker": "MAYA",
+      "text": "You never listen to me."
+    },
+    {
+      "speaker": "DEV",
+      "text": "That's not fair, and you know it."
+    }
+  ],
+  "camera_directions": [],
+  "transitions": []
+}

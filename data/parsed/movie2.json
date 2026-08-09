@@ -1,0 +1,160 @@
+{
+  "scenes": [
+    {
+      "scene_number": 1,
+      "int_ext": "INT",
+      "location": "BEDROOM",
+      "time_of_day": "NIGHT",
+      "characters": [
+        "Swaraj"
+      ],
+      "actions": [
+        {
+          "text": "Swaraj sits in a chair by his window, soaked in blue light, staring out."
+        },
+        {
+          "text": "(rocks his head restlessly)"
+        },
+        {
+          "text": "(sigh) He reaches for his PHONE on the DESK."
+        },
+        {
+          "text": "He scrolls through videos, his face illuminated by the phone."
+        },
+        {
+          "text": "(sharp exhale) He puts the phone face down on the desk."
+        },
+        {
+          "text": "He pushes his chair back and moves out of frame."
+        },
+        {
+          "text": "We hear the SWITCH turn off (O.C). Song stops."
+        },
+        {
+          "text": "We hear the switch turn on (O.C)."
+        }
+      ],
+      "dialogue": [],
+      "camera_directions": [],
+      "transitions": [
+        "CUT TO BLACK",
+        "CUT TO:"
+      ]
+    },
+    {
+      "scene_number": 2,
+      "int_ext": "INT",
+      "location": "DESK",
+      "time_of_day": "NIGHT",
+      "characters": [
+        "Swaraj"
+      ],
+      "actions": [
+        {
+          "text": "A YELLOW LAMP illuminates a blank paper. Swaraj's hand enters frame and he begins doodling aimlessly."
+        },
+        {
+          "text": "He sketches with increasing frustration. Pressing harder until--SNAP! The pencil tip breaks."
+        },
+        {
+          "text": "Swaraj SLAMS the pencil down, pushes back his chair and walks away."
+        },
+        {
+          "text": "We hear the SWITCH turn off (O.C). Song stops."
+        },
+        {
+          "text": "We hear the SWITCH turn on (O.C)."
+        }
+      ],
+      "dialogue": [],
+      "camera_directions": [
+        "CLOSE UP ON SWARAJ",
+        "CLOSE UP ON PENCIL"
+      ],
+      "transitions": [
+        "CUT TO BLACK",
+        "CUT TO:"
+      ]
+    },
+    {
+      "scene_number": 3,
+      "int_ext": "INT",
+      "location": "BEDROOM",
+      "time_of_day": "NIGHT",
+      "characters": [
+        "Swaraj"
+      ],
+      "actions": [
+        {
+          "text": "Swaraj sits at a keyboard."
+        },
+        {
+          "text": "His fingers hover above the keys."
+        },
+        {
+          "text": "He begins playing attentively."
+        },
+        {
+          "text": "We hear a pleasant meoldy."
+        },
+        {
+          "text": "The SOUND of his live playing is all we hear."
+        },
+        {
+          "text": "His expression softens, a smile forms."
+        },
+        {
+          "text": "We see keys being clicked"
+        },
+        {
+          "text": "His eyes slowly close immersing himself in the music."
+        }
+      ],
+      "dialogue": [],
+      "camera_directions": [
+        "CLOSE UP ON LOWER FACE",
+        "CLOSE UP ON FINGERS",
+        "CLOSE UP ON EYES"
+      ],
+      "transitions": [
+        "MATCH CUT TO:"
+      ]
+    },
+    {
+      "scene_number": 4,
+      "int_ext": "INT",
+      "location": "BEDROOM",
+      "time_of_day": "NIGHT",
+      "characters": [
+        "Swaraj"
+      ],
+      "actions": [
+        {
+          "text": "Swaraj's eyes slowly open."
+        },
+        {
+          "text": "He lies down on his bed."
+        },
+        {
+          "text": "We see him closing his eyes (color shift from night to day)"
+        },
+        {
+          "text": "We see his phone alarm ring"
+        }
+      ],
+      "dialogue": [
+        {
+          "speaker": "SWARAJ",
+          "text": "Fuck."
+        }
+      ],
+      "camera_directions": [
+        "CLOSE UP ON EYES"
+      ],
+      "transitions": [
+        "CUT TO:",
+        "CUT TO SWARAJ'S FACE"
+      ]
+    }
+  ]
+}

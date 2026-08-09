@@ -1,0 +1,27 @@
+{
+  "scene_number": 1,
+  "int_ext": null,
+  "location": "INT. COFFEE SHOP - NIGHT",
+  "time_of_day": null,
+  "characters": [
+    "Sarah",
+    "John"
+  ],
+  "actions": [
+    {
+      "text": "SARAH sits alone at a table. She looks at her phone."
+    },
+    {
+      "text": "A message appears: \"WE NEED TO TALK.\""
+    },
+    {
+      "text": "Sarah looks toward the door."
+    },
+    {
+      "text": "JOHN enters."
+    }
+  ],
+  "dialogue": [],
+  "camera_directions": [],
+  "transitions": []
+}

@@ -1,0 +1,13 @@
+{
+  "scene_number": 1,
+  "int_ext": null,
+  "location": null,
+  "time_of_day": null,
+  "characters": [
+    "Sarah"
+  ],
+  "actions": [],
+  "dialogue": [],
+  "camera_directions": [],
+  "transitions": []
+}
