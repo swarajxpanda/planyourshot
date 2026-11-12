@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown, { type Components } from "react-markdown";
 import { api, errorText } from "../api";
-import type { Channel, Edit, Message, Proposal, Revision, Scene, ShotList, Usage } from "../types";
+import type { Channel, Edit, Message, Proposal, Revision, Scene, ShotList } from "../types";
 import { AutoTextarea, Icon, Menu, Spinner } from "./ui";
 
 interface Props {
@@ -12,15 +12,7 @@ interface Props {
   onScreenplayChanged: (revision: Revision & { content: string }, scenes: Scene[]) => void;
   onShotsChanged: (list: ShotList) => void;
   onClose: () => void;
-  usage: Usage | null;
   onUsageChanged: () => void;
-}
-
-/** Shown under the composer only once more than 60% of the message allowance is used. */
-function usageNote(usage: Usage | null): string {
-  if (!usage) return "";
-  const used = usage.usage.messages, limit = usage.limits.messages_per_day;
-  return limit > 0 && used / limit > 0.6 ? `${Math.min(used, limit)} of ${limit} messages today` : "";
 }
 
 const STARTERS: Record<string, string[]> = {
@@ -29,7 +21,7 @@ const STARTERS: Record<string, string[]> = {
   shots: ["Add an establishing shot to every exterior scene", "Make scene 1 feel more claustrophobic", "Which scenes are over-covered?"],
 };
 
-export default function ChatPanel({ scriptId, channel, hasShots, generating, onScreenplayChanged, onShotsChanged, onClose, usage, onUsageChanged }: Props) {
+export default function ChatPanel({ scriptId, channel, hasShots, generating, onScreenplayChanged, onShotsChanged, onClose, onUsageChanged }: Props) {
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [mode, setMode] = useState<"discuss" | "edit">("discuss");
   const [draft, setDraft] = useState("");
@@ -143,7 +135,6 @@ export default function ChatPanel({ scriptId, channel, hasShots, generating, onS
           <Icon name="send" />
         </button>
       </form>
-      {usageNote(usage) && <p className="composer-note">{usageNote(usage)}</p>}
     </aside>
   );
 }

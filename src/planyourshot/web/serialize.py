@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from planyourshot.web import shotfix
 from planyourshot.web.models import Message, Proposal, Revision, Script, Shot, User
 
 
@@ -85,5 +86,7 @@ def shot(s: Shot) -> dict:
         "props": s.props or [],
         "location": s.location,
         "notes": s.notes,
+        # empty angle, movement or lens: "Fill missing details" can complete it
+        "missing": shotfix.missing(s),
         "updated_at": ts(s.updated_at),
     }

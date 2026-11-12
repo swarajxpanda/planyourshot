@@ -23,15 +23,16 @@ from typing import Any
 
 from fastapi import Depends, HTTPException
 from sqlalchemy import func, select
-
-from planyourshot.web import leases
 from sqlalchemy.orm import Session
+
+from planyourshot.web import leases, shotfix
 
 from planyourshot.web.ai import AIBusy, AIError, AIService, get_ai
 from planyourshot.web.db import get_db, new_session
 from planyourshot.web.deps import current_user, ready_script
 from planyourshot.web.limits import PLAN_NAMES, Limits, limits_for
 from planyourshot.web.models import Script, UsageEvent, User, utcnow
+from planyourshot.web.serialize import ts
 from planyourshot.web.settings import get_settings
 
 log = logging.getLogger("planyourshot.usage")
@@ -49,19 +50,20 @@ class Quota:
     limit_field: str
     label: str
     window_label: str
+    display: str  # the row label in the Usage popover
     standalone_only: bool = False  # ignore scene events that belong to a full run
 
 
 QUOTAS: dict[str, Quota] = {
     q.key: q for q in (
         Quota("messages", ("chat", "edit", "shot_chat"), timedelta(hours=24), "messages_per_day",
-              "assistant messages", "24 hours"),
+              "assistant messages", "24 hours", "Assistant messages (today)"),
         Quota("full_generations", ("shot_generate_full",), timedelta(days=30), "full_generations_per_month",
-              "full shot-list generations", "30 days"),
+              "full shot-list generations", "30 days", "Full shot-list generations (this month)"),
         Quota("scene_generations", ("shot_generate_scene",), timedelta(hours=24), "scene_generations_per_day",
-              "single-scene generations", "24 hours", standalone_only=True),
+              "single-scene generations", "24 hours", "Scene regenerations (today)", standalone_only=True),
         Quota("shot_regenerations", ("shot_regenerate",), timedelta(hours=24), "shot_regenerations_per_day",
-              "shot regenerations", "24 hours"),
+              "shot regenerations", "24 hours", "Shot regenerations (today)"),
     )
 }
 KIND_QUOTA = {k: q for q in QUOTAS.values() for k in q.kinds}
@@ -212,15 +214,30 @@ class MeteredAI:
         return self._run("shot_chat", lambda: self.ai.revise_shots(title, context, shots, history, message),
                          _size([title, context, shots, message]) + sum(len(c) for _, c in history))
 
+    def unit(self, kind: str, call: Callable[[], Any], input_chars: int):
+        """Meter several model calls as one action: one usage event, one global slot."""
+        return self._run(kind, call, input_chars)
+
+    def repairer(self, title: str, scene_text: str):
+        """The repair call for incomplete new shots. It runs inside the caller's metered
+        unit, so it is part of the same generation for usage and quotas."""
+        return lambda incomplete: self.ai.complete_shots(title, scene_text, shotfix.describe(incomplete)).shots
+
     def regenerate_shot(self, title, scene_text, scene_shots, target, instruction, guidance):
-        return self._run("shot_regenerate",
-                         lambda: self.ai.regenerate_shot(title, scene_text, scene_shots, target, instruction, guidance),
-                         _size([title, scene_text, scene_shots, target, instruction, guidance]))
+        def call():
+            spec = self.ai.regenerate_shot(title, scene_text, scene_shots, target, instruction, guidance)
+            shotfix.finish([spec], self.repairer(title, scene_text))
+            return spec
+
+        return self._run("shot_regenerate", call, _size([title, scene_text, scene_shots, target, instruction, guidance]))
 
     def scene_shots(self, title, scene_number, scene_text, previous, guidance):
-        return self._run("shot_generate_scene",
-                         lambda: self.ai.scene_shots(title, scene_number, scene_text, previous, guidance),
-                         _size([title, scene_text, previous, guidance]))
+        def call():
+            specs = self.ai.scene_shots(title, scene_number, scene_text, previous, guidance)
+            shotfix.finish(specs, self.repairer(title, scene_text))
+            return specs
+
+        return self._run("shot_generate_scene", call, _size([title, scene_text, previous, guidance]))
 
 
 # ---------- quotas ----------
@@ -292,17 +309,42 @@ def check_quota(db: Session, user: User, limits: Limits, kind: str) -> None:
             f"More become available in {_human(wait)}.", wait)
 
 
+# Plan features listed in the Usage popover: limits field -> label.
+FEATURES = {"csv_export": "CSV export"}
+
+
 def usage_summary(db: Session, user: User) -> dict:
+    """Plan, limits and current usage. `rows` and `features` carry everything the UI shows
+    about the plan (labels included), so a new plan or a changed limit needs no frontend change.
+
+    For each rolling window, `resets_at` / `reset_in_seconds` say when the oldest counted
+    event leaves the window (one unit frees up); both are null when nothing is counted."""
     limits = limits_for(user)
-    used = {key: _count(db, _counted(db, user.id, q)) for key, q in QUOTAS.items()}
+    now = utcnow()
+    used: dict[str, int] = {}
+    rows: list[dict] = []
+    for key, q in QUOTAS.items():
+        counted = _counted(db, user.id, q)
+        used[key] = _count(db, counted)
+        oldest = db.scalar(select(func.min(counted.subquery().c.created_at)))
+        resets = oldest + q.window if oldest else None
+        rows.append({
+            "key": key, "label": q.display, "used": used[key], "limit": getattr(limits, q.limit_field),
+            "window": q.window_label, "resets_at": ts(resets),
+            "reset_in_seconds": max(0, math.ceil((resets - now).total_seconds())) if resets else None,
+        })
     used["requests_last_minute"] = _count(db, select(UsageEvent.id).where(
         UsageEvent.user_id == user.id, UsageEvent.run_id.is_(None), UsageEvent.created_at > _since(MINUTE)))
     used["scripts"] = db.scalar(select(func.count()).select_from(Script).where(Script.user_id == user.id)) or 0
+    rows.append({"key": "scripts", "label": "Screenplays", "used": used["scripts"], "limit": limits.max_scripts,
+                 "window": None, "resets_at": None, "reset_in_seconds": None})
     return {
         "plan": limits.plan,
         "plan_name": PLAN_NAMES.get(limits.plan, limits.plan),
         "limits": {k: v for k, v in limits.__dict__.items() if k != "plan"},
         "usage": used,
+        "rows": rows,
+        "features": [{"key": k, "label": label, "included": bool(getattr(limits, k))} for k, label in FEATURES.items()],
     }
 
 

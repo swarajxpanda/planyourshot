@@ -30,6 +30,7 @@ export default function ShotList({ scriptId, scenes, data, setData, onError, usa
   const [confirmAll, setConfirmAll] = useState(false);
   // Plan limits (429) and features off for the plan (403) are shown inline in the toolbar.
   const [limitError, setLimitError] = useState("");
+  const [filling, setFilling] = useState(false);
   const [confirmScene, setConfirmScene] = useState<Group | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
   const [dropAt, setDropAt] = useState<{ scene: number; index: number } | null>(null);
@@ -52,6 +53,19 @@ export default function ShotList({ scriptId, scenes, data, setData, onError, usa
   const patchLocal = (shot: Shot) => setData({ ...data, shots: data.shots.map((s) => (s.id === shot.id ? shot : s)) });
   const generate = (scene: number | null) => run(() => api.generateShots(scriptId, scene)).finally(onUsageChanged);
   const canExport = !!usage?.limits.csv_export;
+  const incomplete = data.shots.filter((s) => s.missing).length; // stays right after local edits
+  const fillMissing = async () => {
+    setFilling(true);
+    try {
+      setData(await api.fillMissing(scriptId));
+      setLimitError("");
+    } catch (e) {
+      report(e);
+    } finally {
+      setFilling(false);
+      onUsageChanged();
+    }
+  };
 
   const move = (shot: Shot, scene: number, index: number) => run(() => api.moveShot(scriptId, shot.id, scene, index));
   const drop = () => {
@@ -88,6 +102,12 @@ export default function ShotList({ scriptId, scenes, data, setData, onError, usa
           <strong>{data.shots.length}</strong> {data.shots.length === 1 ? "shot" : "shots"} · {groups.filter((g) => g.shots.length).length} of {groups.length} scenes covered
         </div>
         <div className="row">
+          {incomplete > 0 && (
+            <button className="btn small" disabled={generating || filling} onClick={fillMissing}
+              title={`${incomplete} ${incomplete === 1 ? "shot is" : "shots are"} missing an angle, movement or lens`}>
+              {filling ? <Spinner small /> : <Icon name="edit" size={14} />} Fill missing details
+            </button>
+          )}
           {canExport && (
             <a className="btn small" href={`/api/scripts/${scriptId}/shots/export.csv`} aria-disabled={!data.shots.length}>
               <Icon name="download" size={14} /> Export CSV

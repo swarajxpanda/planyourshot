@@ -144,7 +144,7 @@ def test_stale_proposal_cannot_be_applied(client, script, ai):
 def test_shot_list_generate_and_curate(client, script, ai):
     sid = script["id"]
     base = f"/api/scripts/{sid}/shots"
-    assert client.get(base).json() == {"shots": [], "status": "none", "error": "", "done": 0, "total": 0}
+    assert client.get(base).json() == {"shots": [], "incomplete": 0, "status": "none", "error": "", "done": 0, "total": 0}
     assert client.post(f"{base}/generate", json={}).status_code == 202
     data = client.get(base).json()
     assert data["status"] == "ready" and (data["done"], data["total"]) == (2, 2)

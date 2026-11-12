@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from planyourshot.web.ai import (
-    AIError, AIService, DiscussResponse, EditOp, EditResponse, ShotRevision, ShotSpec,
+    AIError, AIService, DiscussResponse, EditOp, EditResponse, ShotFill, ShotFills, ShotRevision, ShotSpec,
 )
 
 SCREENPLAY = """THE LAST TRAIN
@@ -70,6 +70,9 @@ class FakeAI(AIService):
         self.edits = [EditOp(find="I almost didn't.", replace="I almost stayed home.", reason="Sharper line")]
         self.shot_ops = []
         self.before_call = None  # optional hook, e.g. to block a call mid-flight
+        # The repair call for shots with missing details: "fill" answers (in messy casing, to
+        # exercise normalisation), "partial" answers with blanks, "fail" raises, "skip" returns nothing.
+        self.repair = "fill"
 
     def _check(self):
         if self.before_call:
@@ -96,12 +99,27 @@ class FakeAI(AIService):
         return [
             ShotSpec(size="WS", angle="Eye level", movement="Static", lens="24mm", description=f"Establish scene {scene_number}",
                      composition="Subject frame left", characters=["Sarah"], props=["phone"], notes="Geography"),
-            ShotSpec(size="CU", description="Reaction", lens="85mm"),
+            # what Ollama was doing: technical fields left empty or as placeholders
+            ShotSpec(size="CU", angle="", movement="-", lens="n/a", description="Reaction", composition="", notes=""),
         ]
 
     def regenerate_shot(self, title, scene_text, scene_shots, target, instruction, guidance):
         self._check()
-        return ShotSpec(size="ECU", description=f"Regenerated: {instruction}", lens="100mm")
+        self.calls.append(("regenerate", target, instruction))
+        return ShotSpec(size="ECU", angle="none", movement="", lens="100 MM", description=f"Regenerated: {instruction}",
+                        composition="Tight on the eyes", notes="")
+
+    def complete_shots(self, title, scene_text, shots):
+        self.calls.append(("repair", scene_text, shots))
+        if self.repair == "fail":
+            raise AIError("The AI service couldn't complete this request. Please try again.")
+        indices = [int(n) for n in re.findall(r"^\[(\d+)\]", shots, re.M)]
+        if self.repair == "skip":
+            return ShotFills(shots=[])
+        if self.repair == "partial":
+            return ShotFills(shots=[ShotFill(index=i, angle="—", movement="none", lens="wide") for i in indices])
+        return ShotFills(shots=[ShotFill(index=i, angle="low angle", movement="slow push in", lens="85 MM lens")
+                                for i in indices])
 
     def revise_shots(self, title, context, shots, history, message):
         self._check()

@@ -482,3 +482,47 @@ def test_fake_matches_real_signatures():
 
     for name in ("discuss", "propose_edits", "scene_shots", "regenerate_shot", "revise_shots"):
         assert inspect.signature(getattr(FakeAI, name)) == inspect.signature(getattr(usage.MeteredAI, name)), name
+
+
+def test_usage_rows_report_when_the_oldest_event_leaves_the_window(client, script, roomy):
+    from datetime import datetime, timedelta, timezone
+
+    sid = script["id"]
+
+    def rows():
+        data = client.get("/api/me/usage").json()
+        return data, {r["key"]: r for r in data["rows"]}
+
+    data, by_key = rows()
+    assert [r["key"] for r in data["rows"]] == [
+        "messages", "full_generations", "scene_generations", "shot_regenerations", "scripts"]
+    assert by_key["messages"] == {"key": "messages", "label": "Assistant messages (today)", "used": 0, "limit": 15,
+                                  "window": "24 hours", "resets_at": None, "reset_in_seconds": None}
+    assert by_key["scripts"]["label"] == "Screenplays" and (by_key["scripts"]["used"], by_key["scripts"]["limit"]) == (1, 2)
+    assert by_key["scripts"]["resets_at"] is None
+    assert data["features"] == [{"key": "csv_export", "label": "CSV export", "included": False}]
+
+    chat(client, sid)
+    age_events(3600)  # the first message was an hour ago
+    chat(client, sid)
+    client.post(f"/api/scripts/{sid}/shots/generate", json={})
+    _, by_key = rows()
+    msgs = by_key["messages"]
+    assert msgs["used"] == 2
+    # driven by the *oldest* counted event: 24 h after it, i.e. about 23 h from now
+    assert 23 * 3600 - 60 <= msgs["reset_in_seconds"] <= 23 * 3600
+    resets_at = datetime.fromisoformat(msgs["resets_at"].rstrip("Z"))
+    assert abs((resets_at - datetime.now(timezone.utc).replace(tzinfo=None)) - timedelta(seconds=msgs["reset_in_seconds"])) < timedelta(seconds=5)
+    full = by_key["full_generations"]
+    assert full["used"] == 1 and 30 * 86400 - 60 <= full["reset_in_seconds"] <= 30 * 86400
+    # scene events inside the full run don't count as single-scene runs, so nothing to reset
+    assert by_key["scene_generations"]["used"] == 0 and by_key["scene_generations"]["resets_at"] is None
+
+    age_events(23 * 3600 + 1)  # the first message has left the 24 h window
+    _, by_key = rows()
+    assert by_key["messages"]["used"] == 1 and by_key["messages"]["reset_in_seconds"] <= 3600
+
+    set_user("a@example.com", plan="pro")  # labels and limits follow the plan, from the backend
+    data, by_key = rows()
+    assert data["plan_name"] == "Pro" and by_key["messages"]["limit"] == 200
+    assert data["features"] == [{"key": "csv_export", "label": "CSV export", "included": True}]

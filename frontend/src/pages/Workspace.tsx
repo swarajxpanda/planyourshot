@@ -6,6 +6,7 @@ import ResizeHandle from "../components/ResizeHandle";
 import ScreenplayView from "../components/ScreenplayView";
 import ShotList, { ShotDatalists } from "../components/ShotList";
 import { Confirm, Dialog, Icon, Spinner, Toast } from "../components/ui";
+import UsageButton from "../components/UsageButton";
 import type { Revision, Scene, Script, ShotList as ShotListData } from "../types";
 import { formatDate, storedBoolean, storedNumber, usePersistentState, usePolling, useUsage } from "../util";
 import { AppBar, RenameDialog } from "./Dashboard";
@@ -32,7 +33,8 @@ export default function Workspace() {
   const [viewing, setViewing] = useState<(Revision & { content: string }) | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [usage, refreshUsage] = useUsage();
+  const usageState = useUsage();
+  const { usage, refresh: refreshUsage } = usageState;
   const [outlineWidth, setOutlineWidth] = usePersistentState("pys.outlineWidth", OUTLINE.default, storedNumber(OUTLINE.min, OUTLINE.max));
   const [assistantWidth, setAssistantWidth] = usePersistentState("pys.assistantWidth", ASSISTANT.default, storedNumber(ASSISTANT.min, ASSISTANT.max));
   const [outlineCollapsed, setOutlineCollapsed] = usePersistentState("pys.outlineCollapsed", false, storedBoolean);
@@ -59,6 +61,9 @@ export default function Workspace() {
 
   usePolling(load, script?.status === "processing");
   usePolling(() => api.shots(id).then(setShots).catch(() => undefined), shots?.status === "generating");
+  // A generation uses quota as it runs: refresh usage when it starts and when it finishes.
+  const shotStatus = shots?.status;
+  useEffect(() => { if (shotStatus) refreshUsage(); }, [shotStatus, refreshUsage]);
 
   useEffect(() => { document.title = script ? `${script.title} — Plan Your Shot` : "Plan Your Shot"; return () => { document.title = "Plan Your Shot"; }; }, [script]);
 
@@ -145,6 +150,7 @@ export default function Workspace() {
           </button>
         </nav>
         <div className="appbar-tools">
+          <UsageButton state={usageState} />
           <button className="btn ghost small" onClick={() => setHistory(true)}><Icon name="history" size={15} /> <span className="hide-narrow">Versions</span></button>
           <button className={assistant ? "btn small active" : "btn small"} aria-pressed={assistant} onClick={() => setAssistant((a) => !a)}>
             <Icon name="chat" size={15} /> <span className="hide-narrow">Assistant</span>
@@ -221,7 +227,7 @@ export default function Workspace() {
         {assistant && (
           <ChatPanel scriptId={id} channel={tab} hasShots={!!shots?.shots.length} generating={shots?.status === "generating"}
             onScreenplayChanged={onScreenplayChanged} onShotsChanged={setShots} onClose={() => setAssistant(false)}
-            usage={usage} onUsageChanged={refreshUsage} />
+            onUsageChanged={refreshUsage} />
         )}
       </div>
 

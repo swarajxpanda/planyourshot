@@ -113,6 +113,8 @@ export interface Shot {
   props: string[];
   location: string;
   notes: string;
+  /** empty angle, movement or lens, as judged by the backend */
+  missing: boolean;
 }
 
 export interface ShotList {
@@ -136,9 +138,30 @@ export interface PlanLimits {
   csv_export: boolean;
 }
 
+/** One limit, as the backend describes it (label included). */
+export interface UsageRow {
+  key: string;
+  label: string;
+  used: number;
+  limit: number;
+  /** rolling window, e.g. "24 hours"; null for limits that don't reset */
+  window: string | null;
+  /** when the oldest counted event leaves the window; null when nothing is counted */
+  resets_at: string | null;
+  reset_in_seconds: number | null;
+}
+
+export interface UsageFeature {
+  key: string;
+  label: string;
+  included: boolean;
+}
+
 export interface Usage {
   plan: string;
   plan_name: string;
+  rows: UsageRow[];
+  features: UsageFeature[];
   limits: PlanLimits;
   usage: {
     scripts: number;

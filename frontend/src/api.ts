@@ -83,6 +83,8 @@ export const api = {
   duplicateShot: (id: string, sid: number) => req<ShotList>(`/scripts/${id}/shots/${sid}/duplicate`, json("POST")),
   moveShot: (id: string, sid: number, scene_number: number, index: number) =>
     req<ShotList>(`/scripts/${id}/shots/${sid}/move`, json("PUT", { scene_number, index })),
+  fillMissing: (id: string) =>
+    req<ShotList & { filled: { shots: number; repaired: number; fallback: number } }>(`/scripts/${id}/shots/fill-missing`, json("POST")),
   regenerateShot: (id: string, sid: number, instruction: string) =>
     req<Shot>(`/scripts/${id}/shots/${sid}/regenerate`, json("POST", { instruction })),
   shotChat: (id: string, message: string) =>

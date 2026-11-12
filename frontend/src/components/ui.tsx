@@ -23,6 +23,7 @@ const PATHS: Record<string, ReactNode> = {
   sidebar: <><rect x="4" y="5" width="16" height="14" rx="1.5" /><path d="M9.5 5v14" /></>,
   list: <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" />,
   grid: <><rect x="4" y="4" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" /></>,
+  usage: <path d="M5 19v-5M10 19V9M15 19v-8M20 19V5M3.5 19.5h17" />,
   alert: <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.2v.3" /></>,
 };
 

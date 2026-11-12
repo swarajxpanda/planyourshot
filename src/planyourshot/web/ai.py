@@ -61,16 +61,53 @@ class EditResponse(BaseModel):
     edits: list[EditOp] = Field(default_factory=list)
 
 
+# Controlled vocabularies for generated shots (web/shotfix.py normalises to these).
+ANGLES = ["Eye level", "Low angle", "High angle", "Overhead", "Dutch angle", "Over-the-shoulder", "POV", "Profile"]
+MOVEMENTS = ["Static", "Push-in", "Pull-out", "Pan", "Tilt", "Tracking", "Handheld", "Dolly", "Crane", "Rack focus"]
+
+_ANGLE_DESC = (
+    f"Required. Camera angle, exactly one of: {', '.join(ANGLES)}. Use Eye level when nothing in the beat "
+    "motivates another choice."
+)
+_MOVEMENT_DESC = (
+    f"Required, never empty. Camera movement, exactly one of: {', '.join(MOVEMENTS)}. Use Static when the camera "
+    "does not move."
+)
+_LENS_DESC = (
+    "Required, never empty. Full-frame focal length written like \"35mm\". Match it to the size: wide sizes "
+    "(EWS, WS) use wider lenses such as 16-24mm, medium sizes 35-50mm, close sizes (MCU, CU, ECU) longer lenses "
+    "such as 65-100mm."
+)
+
+
 class ShotSpec(BaseModel):
-    size: ShotSize = Field(description="Shot size: ECU, CU, MCU, MS, MLS, WS or EWS")
-    angle: str = Field(default="", description="Camera angle, e.g. Eye level, Low angle, High angle, Over-the-shoulder, POV, Overhead, Dutch")
-    movement: str = Field(default="", description="Camera movement, e.g. Static, Slow push-in, Pan, Tilt, Handheld, Tracking, Dolly out, Crane")
-    lens: str = Field(default="", description="Suggested focal length on full frame, e.g. 35mm, 85mm. Empty if it doesn't matter.")
-    description: str = Field(description="What the audience sees: subject and action in this shot, one or two sentences.")
-    composition: str = Field(default="", description="Framing and subject placement: where things sit in frame, depth, foreground/background.")
+    """A generated shot. The technical fields are required (no defaults) so the model can't omit them."""
+
+    size: ShotSize = Field(description="Required. Shot size: ECU, CU, MCU, MS, MLS, WS or EWS.")
+    angle: str = Field(description=_ANGLE_DESC)
+    movement: str = Field(description=_MOVEMENT_DESC)
+    lens: str = Field(description=_LENS_DESC)
+    description: str = Field(description=(
+        "Required. One or two plain sentences about what the audience sees: subject and action. Do not repeat the "
+        "scene heading, do not copy the script's capitalised camera directions (such as CLOSE UP ON ...), and do "
+        "not state the shot size."))
+    composition: str = Field(description="Required. Framing and subject placement: where things sit in frame, depth, foreground/background.")
     characters: list[str] = Field(default_factory=list, description="Characters visible in the shot")
     props: list[str] = Field(default_factory=list, description="Props or key visual elements in the shot")
-    notes: str = Field(default="", description="Cinematography intent: why this size/lens/movement serves the story beat.")
+    notes: str = Field(description="Required. Cinematography intent: why this size, angle, lens and movement serve the story beat.")
+
+
+class ShotFill(BaseModel):
+    """Missing technical details for one shot, by the [number] it was listed with."""
+
+    index: int = Field(description="The number shown in [brackets] before the shot.")
+    angle: str = Field(description=_ANGLE_DESC)
+    movement: str = Field(description=_MOVEMENT_DESC)
+    lens: str = Field(description=_LENS_DESC)
+
+
+class ShotFills(BaseModel):
+    shots: list[ShotFill]
 
 
 class SceneShots(BaseModel):
@@ -153,7 +190,12 @@ _SHOT_RULES = (
     "Shot sizes: ECU (extreme close-up), CU (close-up), MCU (medium close-up), MS (medium shot), MLS (medium long "
     "shot), WS (wide shot), EWS (extreme wide shot). Lenses are full-frame equivalents. Honour any camera direction "
     "already written in the script. Cover every story beat in order, vary sizes with purpose, and prefer the fewest "
-    "shots that tell the scene clearly — a short scene may need 2–4 shots, a long dialogue scene 6–10."
+    "shots that tell the scene clearly — a short scene may need 2–4 shots, a long dialogue scene 6–10.\n"
+    f"Every shot must have size, angle, movement and lens filled in. Angle is one of: {', '.join(ANGLES)}. "
+    f"Movement is one of: {', '.join(MOVEMENTS)} (Static when the camera doesn't move). Lens is a full-frame focal "
+    "length like 35mm that suits the size. \"description\" is one or two plain sentences about what the audience "
+    "sees: it must not repeat the scene heading, must not copy the script's capitalised camera directions "
+    "(\"CLOSE UP ON ...\"), and must not state the shot size, which belongs in the size field."
 )
 
 
@@ -251,6 +293,16 @@ class AIService:
             + (f"\n\nDIRECTION FROM THE FILMMAKER: {instruction}" if instruction else "")
         )
         return self._structured(ShotSpec, [SystemMessage(content=system), HumanMessage(content=human)])
+
+    def complete_shots(self, title: str, scene_text: str, shots: str) -> ShotFills:
+        """The repair call: the missing angle / movement / lens for the listed shots only."""
+        system = (
+            f"You are an experienced director of photography completing the shot list for \"{title}\". Some shots "
+            "are missing technical details. For EVERY shot listed, return its angle, movement and lens, using its "
+            f"[number] as index. {_SHOT_RULES}{_MATERIAL_ONLY}"
+        )
+        human = f"SCENE\n{scene_text}\n\nSHOTS MISSING DETAILS\n{shots}"
+        return self._structured(ShotFills, [SystemMessage(content=system), HumanMessage(content=human)])
 
     def revise_shots(self, title: str, context: str, shots: str, history: list[tuple[str, str]], message: str) -> ShotRevision:
         system = (

@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from planyourshot.web import jobs, retrieval, serialize, tasks, usage
+from types import SimpleNamespace
+
+from planyourshot.web import jobs, retrieval, serialize, shotfix, tasks, usage
 from planyourshot.web.ai import REFUSAL, SHOT_SIZES, AIError, AIService, ShotPatch, get_ai
 from planyourshot.web.db import get_db
 from planyourshot.web.deps import current_user, ready_script
@@ -66,8 +68,11 @@ def _scene(scenes: list[SceneInfo], number: int) -> SceneInfo:
 
 
 def _payload(db: Session, script: Script) -> dict:
+    shots = _all(db, script.id)
     return {
-        "shots": [serialize.shot(s) for s in _all(db, script.id)],
+        "shots": [serialize.shot(s) for s in shots],
+        # shots without an angle, movement or lens (lists from before these were required)
+        "incomplete": sum(1 for s in shots if shotfix.missing(s)),
         "status": script.shotlist_status,
         "error": script.shotlist_error,
         "done": script.shotlist_done,
@@ -389,3 +394,69 @@ def export_csv(script: Script = Depends(csv_export_allowed), db: Session = Depen
         shots_csv(db, script.id), media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{safe_name(script.title, "shot-list")} - shot list.csv"'},
     )
+
+
+# "Fill missing details": batches of shots sent per repair call.
+FILL_BATCH_SHOTS = 24
+FILL_BATCH_CHARS = 12_000
+
+
+def _fill_batches(shots: list[Shot], scene_text: dict[int, str]) -> list[tuple[str, list[Shot]]]:
+    by_scene: dict[int, list[Shot]] = {}
+    for s in shots:
+        by_scene.setdefault(s.scene_number, []).append(s)
+    batches: list[tuple[str, list[Shot]]] = []
+    rows: list[Shot] = []
+    texts: list[str] = []
+    for number, scene_shots in sorted(by_scene.items()):
+        text = scene_text.get(number) or f"{scene_shots[0].scene_heading}\n(This scene is no longer in the screenplay.)"
+        block = f"SCENE {number}\n{text[:FILL_BATCH_CHARS]}"
+        if rows and (len(rows) + len(scene_shots) > FILL_BATCH_SHOTS or sum(map(len, texts)) + len(block) > FILL_BATCH_CHARS):
+            batches.append(("\n\n".join(texts), rows))
+            rows, texts = [], []
+        rows.extend(scene_shots)
+        texts.append(block)
+    if rows:
+        batches.append(("\n\n".join(texts), rows))
+    return batches
+
+
+@router.post("/fill-missing")
+def fill_missing(guard: ModelGuard = Depends(model_access("shot_generate_scene")), db: Session = Depends(get_db)):
+    """Fill empty angle / movement / lens on existing shots: the model first, then the same
+    deterministic fallback as generation. A field that already has a value is never changed,
+    and shots with nothing missing are not touched. Counts as one scene regeneration."""
+    script, metered = guard.script, guard.ai
+    if script.shotlist_status == "generating":
+        raise HTTPException(409, "Wait for shot generation to finish first.")
+    targets = [s for s in _all(db, script.id) if shotfix.missing(s)]
+    if not targets:
+        raise HTTPException(409, "Every shot already has an angle, movement and lens.")
+    batches = _fill_batches(targets, {sc.number: sc.text for sc in _scenes(db, script)})
+
+    def work():
+        planned: dict[int, dict[str, str]] = {}
+        total = {"shots": len(targets), "repaired": 0, "fallback": 0}
+        for scene_text, rows in batches:
+            copies = [SimpleNamespace(scene_number=r.scene_number, size=r.size, description=r.description,
+                                      **{f: getattr(r, f) for f in shotfix.FIELDS}) for r in rows]
+            report = shotfix.fill_blanks(copies, metered.repairer(script.title, scene_text))
+            total["repaired"] += report.repaired
+            total["fallback"] += report.fallback
+            for row, copy in zip(rows, copies):
+                planned[row.id] = {f: getattr(copy, f) for f in shotfix.FIELDS if shotfix.is_blank(getattr(row, f))}
+        return planned, total
+
+    try:
+        planned, total = metered.unit("shot_generate_scene", work,
+                                      sum(len(t) for t, _ in batches) + sum(len(s.description) for s in targets))
+    except AIError as exc:
+        raise ai_error(exc) from exc
+    for row in targets:
+        for field, value in planned.get(row.id, {}).items():
+            if shotfix.is_blank(getattr(row, field)):  # only blanks, never an existing value
+                setattr(row, field, value[:80])
+        row.updated_at = utcnow()
+    script.updated_at = utcnow()
+    db.commit()
+    return {**_payload(db, script), "filled": total}

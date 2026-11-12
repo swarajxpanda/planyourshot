@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, errorText } from "./api";
 import type { Usage } from "./types";
 
 export function formatDate(iso: string): string {
@@ -52,10 +52,40 @@ export const storedNumber = (min: number, max: number) => (raw: unknown) =>
   typeof raw === "number" && Number.isFinite(raw) ? Math.min(max, Math.max(min, Math.round(raw))) : undefined;
 export const storedBoolean = (raw: unknown) => (typeof raw === "boolean" ? raw : undefined);
 
-/** The signed-in user's plan, limits and current usage. `refresh` after anything that uses a quota. */
-export function useUsage() {
+export interface UsageState {
+  usage: Usage | null;
+  /** Date.now() when `usage` arrived; reset countdowns are measured from here */
+  fetchedAt: number;
+  loading: boolean;
+  error: string;
+  refresh: () => void;
+}
+
+/** The signed-in user's plan, limits and current usage. Call `refresh` after anything that uses a quota. */
+export function useUsage(): UsageState {
   const [usage, setUsage] = useState<Usage | null>(null);
-  const refresh = useCallback(() => { api.usage().then(setUsage).catch(() => undefined); }, []);
+  const [fetchedAt, setFetchedAt] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const latest = useRef(0); // ignore answers that arrive after a newer request
+  const refresh = useCallback(() => {
+    const n = ++latest.current;
+    setLoading(true);
+    api.usage()
+      .then((u) => { if (n === latest.current) { setUsage(u); setFetchedAt(Date.now()); setError(""); } })
+      .catch((e) => { if (n === latest.current) setError(errorText(e)); })
+      .finally(() => { if (n === latest.current) setLoading(false); });
+  }, []);
   useEffect(refresh, [refresh]);
-  return [usage, refresh] as const;
+  return { usage, fetchedAt, loading, error, refresh };
+}
+
+/** "3h 20m", "29d 23h", "45m", "under a minute". */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return "under a minute";
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d) return h ? `${d}d ${h}h` : `${d}d`;
+  if (h) return m ? `${h}h ${m}m` : `${h}h`;
+  return `${m}m`;
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, errorText } from "../api";
 import { useAuth } from "../App";
 import { Confirm, Dialog, Icon, Menu, Spinner, Toast, Wordmark } from "../components/ui";
+import UsageButton from "../components/UsageButton";
 import type { Script } from "../types";
 import { formatDate, formatSize, usePersistentState, usePolling, useUsage } from "../util";
 
@@ -86,7 +87,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [scripts, setScripts] = useState<Script[] | null>(null);
   const [listLimit, setLimit] = useState(user.max_scripts);
-  const [usage, refreshUsage] = useUsage();
+  const usageState = useUsage();
+  const { usage, refresh: refreshUsage } = usageState;
   const limit = usage?.limits.max_scripts ?? listLimit;
   const [loadError, setLoadError] = useState("");
   const [toast, setToast] = useState("");
@@ -135,7 +137,9 @@ export default function Dashboard() {
       onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
       onDrop={(e) => { e.preventDefault(); setDragging(false); upload(e.dataTransfer.files[0]); }}>
-      <AppBar />
+      <AppBar>
+        <div className="appbar-tools"><UsageButton state={usageState} /></div>
+      </AppBar>
       <main className="dashboard">
         <div className="dash-head">
           <div>
