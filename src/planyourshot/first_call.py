@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from llm import get_llm
+from planyourshot.llm import get_llm
 
 SCREENPLAY_SNIPPET = """\
 INT. COFFEE SHOP - NIGHT

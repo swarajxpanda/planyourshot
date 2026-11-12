@@ -1,0 +1,67 @@
+# Postgres + web + worker, sharing one image and one uploads volume.
+#
+#   cp .env.example .env    # fill it in
+#   docker compose up -d --build
+#
+# Open http://localhost:8000. Logs: docker compose logs -f web worker
+
+x-app: &app
+  image: planyourshot:latest
+  build:
+    context: .
+    args:
+      VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+  env_file:
+    - path: .env
+      required: false
+  environment: &app-env
+    DATABASE_URL: postgresql+psycopg://pys:${POSTGRES_PASSWORD:-pys}@postgres:5432/planyourshot
+    STORAGE_DIR: /data/uploads
+    RUN_WORKER_IN_WEB: "0"
+    # Ollama on the host machine (Docker Desktop, or Linux via host-gateway below)
+    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  volumes:
+    - uploads:/data/uploads
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pys
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pys}
+      POSTGRES_DB: planyourshot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pys -d planyourshot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      - "${PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    # Give a model call in progress time to finish; the job is then put back in the queue.
+    stop_grace_period: 150s
+
+volumes:
+  pgdata:
+  uploads:

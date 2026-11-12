@@ -12,3 +12,9 @@ wheels/
 
 # Environment variables
 .env
+# Web app
+data/app.db*
+data/uploads/
+frontend/node_modules/
+frontend/dist/
+.pytest_cache/
